@@ -2,8 +2,12 @@ package com.example.scanbardcode;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.LoaderManager;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.TextView;
@@ -18,22 +22,26 @@ import com.android.volley.toolbox.DiskBasedCache;
 import com.android.volley.toolbox.HurlStack;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
+import com.example.scanbardcode.Goodreads.GoodreadsResponse;
+import com.example.scanbardcode.Goodreads.XMLParser;
 import com.google.zxing.Result;
+import com.squareup.picasso.Picasso;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
 import me.dm7.barcodescanner.zxing.ZXingScannerView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.w3c.dom.Text;
 
-
-public class ScannerCodeActivity extends AppCompatActivity implements ZXingScannerView.ResultHandler {
-
+public class ScannerCodeActivity extends AppCompatActivity implements ZXingScannerView.ResultHandler, LoaderManager.LoaderCallbacks<String>{
     ZXingScannerView scannerView;
     private int CAMERA_PERMISSION_CODE = 23;
-
     private String authorName = "";
     private String titleName = "";
-
 
     private boolean isCameraAccessAllowed() {
         int result = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
@@ -55,6 +63,10 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
 
         if (!isCameraAccessAllowed()) {
             requestCameraPermission();
+        }
+
+        if (getLoaderManager().getLoader(0) != null) {
+            getSupportLoaderManager().initLoader(0, null, this);
         }
     }
 
@@ -126,8 +138,13 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
             MainActivity.resultTextView.setText(result.getText());
             onBackPressed();
 
-            setContentView(R.layout.activity_main);
-            new GoogleApiBooks(MainActivity.authorTextView, MainActivity.titleTextView, MainActivity.bookImageView).execute(isbn);
+//            setContentView(R.layout.activity_main);
+//            new GoogleApiBooks(MainActivity.authorTextView, MainActivity.titleTextView, MainActivity.bookImageView).execute(isbn);
+
+            Bundle queryBundle = new Bundle();
+            queryBundle.putString("queryString", isbn);
+            queryBundle.putBoolean("isSecondCall", false);
+            getSupportLoaderManager().restartLoader(0, queryBundle, this);
         }
         else{
             Toast toast = Toast.makeText(getApplicationContext(), "Please, scan valid ISBN", Toast.LENGTH_SHORT);
@@ -150,11 +167,84 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
         scannerView.startCamera();
     }
 
+    @NonNull
+    @Override
+    public Loader<String> onCreateLoader(int i, @Nullable Bundle args) {
+        return new BookLoader(this, args.getString("queryString"), args.getBoolean ("isSecondCall", false));
+    }
 
+    @Override
+    public void onLoadFinished(@NonNull Loader<String> loader, String s) {
 
+        try {
+            MainActivity.authorTextView.setText("");
+            MainActivity.titleTextView.setText("");
+            MainActivity.bookImageView.setImageResource(android.R.color.transparent);
 
+            if (!s.contains("GoodreadsResponse")) {
+                JSONObject jsonObject = new JSONObject(s);
+                String totalItemsCount = jsonObject.getString("totalItems");
 
+                if (totalItemsCount.equals("0")) {
+                    MainActivity.authorTextView.setText("Calling GoogleReads");
 
+                    Bundle queryBundle = new Bundle();
+                    queryBundle.putString("queryString", MainActivity.resultTextView.getText().toString());
+                    queryBundle.putBoolean("isSecondCall", true);
 
+                    getSupportLoaderManager().restartLoader(0, queryBundle, this);
+                } else {
 
+                    JSONArray itemsArray = jsonObject.getJSONArray("items");
+
+                    for (int i = 0; i < itemsArray.length(); i++) {
+                        JSONObject book = itemsArray.getJSONObject(i);
+                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
+
+                        try {
+                            JSONArray authors = volumeInfo.getJSONArray("authors");
+                            String authorNames = "";
+
+                            for (int j = 0; j < authors.length(); j++) {
+                                if (j == 0) {
+                                    authorNames += authors.getString(j).replace("\"", "");
+                                } else {
+                                    authorNames += ", " + authors.getString(j);
+                                }
+                            }
+
+                            MainActivity.authorTextView.setText(authorNames);
+                            MainActivity.titleTextView.setText(volumeInfo.getString("title"));
+
+                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
+                            Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
+
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+            else{
+                InputStream xmlStream = new ByteArrayInputStream(s.getBytes());
+                GoodreadsResponse goodreadsResponse = XMLParser.GetGoodreadsResonseFromXML(xmlStream);
+
+                if (goodreadsResponse.TotalResults != 0) {
+                    MainActivity.authorTextView.setText(goodreadsResponse.Results.get(0).Authors.get(0));
+                    MainActivity.titleTextView.setText(goodreadsResponse.Results.get(0).Title);
+                    Picasso.get().load(goodreadsResponse.Results.get(0).URLImage).into(MainActivity.bookImageView);
+                }
+                else{
+                    MainActivity.authorTextView.setText("No results found");
+                }
+            }
+
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onLoaderReset(@NonNull Loader<String> loader) {
+    }
 }
