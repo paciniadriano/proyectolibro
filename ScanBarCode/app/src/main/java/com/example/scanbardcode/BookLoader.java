@@ -9,10 +9,10 @@ public class BookLoader extends AsyncTaskLoader<String> {
     private String isbn;
     private boolean isSecondCall;
 
-    public BookLoader(@NonNull Context context, String queryString, boolean isSecondCall){
+    public BookLoader(@NonNull Context context, String queryString/*, boolean isSecondCall*/){
         super(context);
         this.isbn = queryString;
-        this.isSecondCall = isSecondCall;
+        //this.isSecondCall = isSecondCall;
     }
 
     @Override
@@ -25,13 +25,15 @@ public class BookLoader extends AsyncTaskLoader<String> {
     public String loadInBackground() {
 
         String jsonOrXMLResult = "";
+//
+//        if (isSecondCall){
+//            return NetworkUtils.getBookInfoByGoodreadsApi(isbn);
+//        }
+//        else {
+//            return NetworkUtils.getBookInfoByGoogleApi(isbn);
+//        }
 
-        if (isSecondCall){
-            return NetworkUtils.getBookInfoByGoodreadsApi(isbn);
-        }
-        else {
-            return NetworkUtils.getBookInfoByGoogleApi(isbn);
-        }
+        return NetworkUtils.getBookInfo(isbn);
 
             //return jsonOrXMLResult.toString();
         //}

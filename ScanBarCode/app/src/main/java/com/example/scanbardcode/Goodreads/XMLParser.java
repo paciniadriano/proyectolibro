@@ -12,6 +12,7 @@ public class XMLParser {
 
     public static GoodreadsResponse GetGoodreadsResonseFromXML(InputStream xml) {
         XmlPullParserFactory pullParserFactory;
+        GoodreadsResponse goodreadsResponse = new GoodreadsResponse();
 
         try {
             pullParserFactory = XmlPullParserFactory.newInstance();
@@ -20,7 +21,7 @@ public class XMLParser {
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
             parser.setInput(xml, null);
 
-            return parseXML(parser);
+            goodreadsResponse =  parseXML(parser);
 
         } catch (XmlPullParserException e) {
             e.printStackTrace();
@@ -28,7 +29,7 @@ public class XMLParser {
             e.printStackTrace();
         }
         finally {
-            return null;
+            return goodreadsResponse;
         }
     }
 

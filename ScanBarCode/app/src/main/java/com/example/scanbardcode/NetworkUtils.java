@@ -2,6 +2,9 @@ package com.example.scanbardcode;
 
 import android.net.Uri;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +26,7 @@ public class NetworkUtils {
 
     private static String QUERY_PARAM = "q";
 
-    static String getBookInfoByGoogleApi(String isbn){
+    private static String getBookInfoByGoogleApi(String isbn){
         HttpURLConnection urlConnection = null;
         BufferedReader reader = null;
         String bookJSONString = null;
@@ -78,7 +81,7 @@ public class NetworkUtils {
         }
     }
 
-    public static String getBookInfoByGoodreadsApi(String isbn) {
+    private static String getBookInfoByGoodreadsApi(String isbn) {
         HttpURLConnection urlConnection = null;
         BufferedReader reader = null;
         String bookXMLString = null;
@@ -130,6 +133,26 @@ public class NetworkUtils {
             }
 
             return bookXMLString;
+        }
+    }
+
+    public static String getBookInfo(String isbn) {
+        String bookInfo = getBookInfoByGoogleApi(isbn);
+
+        JSONObject jsonObject = null;
+        try {
+            jsonObject = new JSONObject(bookInfo);
+            String totalItemsCount = jsonObject.getString("totalItems");
+            boolean hasImage = jsonObject.has("imageLinks");
+
+            if (totalItemsCount.equals("0") || !hasImage){
+                bookInfo = getBookInfoByGoodreadsApi(isbn);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        finally{
+            return bookInfo;
         }
     }
 }

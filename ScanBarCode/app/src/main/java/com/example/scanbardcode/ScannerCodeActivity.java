@@ -1,6 +1,7 @@
 package com.example.scanbardcode;
 
 import android.Manifest;
+import android.app.ProgressDialog;
 import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -10,6 +11,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,6 +44,7 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
     private int CAMERA_PERMISSION_CODE = 23;
     private String authorName = "";
     private String titleName = "";
+    private ProgressDialog progress = null;
 
     public static boolean isLoaderRunning = false;
 
@@ -142,7 +145,6 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
 
             Bundle queryBundle = new Bundle();
             queryBundle.putString("queryString", isbn);
-            queryBundle.putBoolean("isSecondCall", false);
             getSupportLoaderManager().restartLoader(0, queryBundle, this);
         }
         else{
@@ -155,6 +157,7 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
     public void onPause(){
         super.onPause();
         scannerView.stopCamera();
+        progress.dismiss();
     }
 
     @Override
@@ -167,15 +170,17 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
     @NonNull
     @Override
     public Loader<String> onCreateLoader(int i, @Nullable Bundle bundle) {
-        return new BookLoader(this, bundle.getString("queryString"), bundle.getBoolean ("isSecondCall", false));
-        //return new TestLoader(this);
+        progress = new ProgressDialog(this);
+        progress.setTitle("Loading");
+        progress.setMessage("Buscando el libro en Google Books y en Goodreads");
+        progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
+        progress.show();
+
+        return new BookLoader(this, bundle.getString("queryString"));
     }
 
     @Override
     public void onLoadFinished(@NonNull Loader<String> loader, String s) {
-
-        Toast.makeText(this, "Loader terminado" , Toast.LENGTH_SHORT).show();
-
         try {
             MainActivity.authorTextView.setText("");
             MainActivity.titleTextView.setText("");
@@ -183,53 +188,35 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
 
             if (!s.contains("GoodreadsResponse")) {
                 JSONObject jsonObject = new JSONObject(s);
-                String totalItemsCount = jsonObject.getString("totalItems");
+                JSONArray itemsArray = jsonObject.getJSONArray("items");
 
-                if (totalItemsCount.equals("0")) {
-                    MainActivity.authorTextView.setText("Calling GoogleReads");
+                for (int i = 0; i < itemsArray.length(); i++) {
+                    JSONObject book = itemsArray.getJSONObject(i);
+                    JSONObject volumeInfo = book.getJSONObject("volumeInfo");
 
-                    Bundle queryBundle = new Bundle();
-                    queryBundle.putString("queryString", MainActivity.resultTextView.getText().toString());
-                    queryBundle.putBoolean("isSecondCall", true);
+                    try {
+                        JSONArray authors = volumeInfo.getJSONArray("authors");
+                        String authorNames = "";
 
-                    getSupportLoaderManager().restartLoader(0, queryBundle, this);
-                } else {
-
-                    onBackPressed();
-
-                    JSONArray itemsArray = jsonObject.getJSONArray("items");
-
-                    for (int i = 0; i < itemsArray.length(); i++) {
-                        JSONObject book = itemsArray.getJSONObject(i);
-                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
-
-                        try {
-                            JSONArray authors = volumeInfo.getJSONArray("authors");
-                            String authorNames = "";
-
-                            for (int j = 0; j < authors.length(); j++) {
-                                if (j == 0) {
-                                    authorNames += authors.getString(j).replace("\"", "");
-                                } else {
-                                    authorNames += ", " + authors.getString(j);
-                                }
+                        for (int j = 0; j < authors.length(); j++) {
+                            if (j == 0) {
+                                authorNames += authors.getString(j).replace("\"", "");
+                            } else {
+                                authorNames += ", " + authors.getString(j);
                             }
-
-                            MainActivity.authorTextView.setText(authorNames);
-                            MainActivity.titleTextView.setText(volumeInfo.getString("title"));
-
-                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                            Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
-
-                        } catch (Exception e) {
-                            e.printStackTrace();
                         }
+
+                        MainActivity.authorTextView.setText(authorNames);
+                        MainActivity.titleTextView.setText(volumeInfo.getString("title"));
+
+                        JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
+                        Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
             }
             else{
-                onBackPressed();
-
                 InputStream xmlStream = new ByteArrayInputStream(s.getBytes());
                 GoodreadsResponse goodreadsResponse = XMLParser.GetGoodreadsResonseFromXML(xmlStream);
 
@@ -242,10 +229,10 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
                     MainActivity.authorTextView.setText("No results found");
                 }
             }
-
         } catch (Exception e){
             e.printStackTrace();
         }
+        onBackPressed();
     }
 
     @Override
