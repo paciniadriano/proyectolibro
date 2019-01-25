@@ -182,34 +182,60 @@ public class NetworkUtils {
         }
     }
 
+
+    //TODO: I have to refactor all this code to obtain independently the author, title and image, without losing any of the three
+    //To do this I have to get the code from the ScannerCodeActivity.onFinishLoad and put it right here
+    //And then I have to return only the three elements that I want in a json format. To parse it in the oonFinishLoad method
     public static String getBookInfo(String isbn) {
         String bookInfoByGoogleApi = getBookInfoByGoogleApi(isbn, false);
-        String bookInfo = null;
-
+        String bookInfo = bookInfoByGoogleApi;
         JSONObject jsonObject = null;
+
         try {
-            jsonObject = new JSONObject(bookInfoByGoogleApi);
+            jsonObject = new JSONObject(bookInfo);
             String totalItemsCount = jsonObject.getString("totalItems");
-            boolean hasImage =  bookInfoByGoogleApi.contains("imageLinks");
+
+            //TODO: There are better ways of doing it, parsin the JSON.
+            boolean hasImage =  bookInfo.contains("\"imageLinks\":");
+            boolean hasAuthor = bookInfo.contains("\"authors\":");
+            boolean hastTitle = bookInfo.contains("\"title\":");
+
             boolean foundInGoogleBooksByISBN = !totalItemsCount.equals("0");
             boolean foundInGoodReadsApiByISBN = false;
 
-            bookInfo = bookInfoByGoogleApi;
-
-            if (!foundInGoogleBooksByISBN || !hasImage){
+            if (!foundInGoogleBooksByISBN || (!hasImage || !hasAuthor || !hastTitle)){
                 bookInfo = getBookInfoByGoodreadsApi(isbn);
                 foundInGoodReadsApiByISBN = !bookInfo.contains("<total-results>0</total-results>");
 
-                if (!foundInGoogleBooksByISBN && !foundInGoodReadsApiByISBN){
+                if (foundInGoodReadsApiByISBN) {
+                    hasImage = !bookInfo.contains("assets/nophoto/");
+                    hasAuthor = bookInfo.contains("<author>");
+                    hastTitle = bookInfo.contains("<title>");
+                }
+
+                if (!foundInGoogleBooksByISBN && !foundInGoodReadsApiByISBN) {
                     bookInfo = getBookInfoByCuspideHTML(isbn);
 
-                    if (bookInfo.isEmpty()){
-                           //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
+                    if (bookInfo.isEmpty()) {
+                        //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
                         bookInfo = getBookInfoByGoogleApi(isbn, true);
                     }
                 }
-                else if (!foundInGoodReadsApiByISBN && foundInGoogleBooksByISBN){
-                    bookInfo = bookInfoByGoogleApi;
+                else if (foundInGoodReadsApiByISBN && (!hasImage || !hasAuthor || !hastTitle)){
+                    bookInfo = getBookInfoByCuspideHTML(isbn);
+
+                    if (bookInfo.isEmpty()) {
+                        //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
+                        bookInfo = getBookInfoByGoogleApi(isbn, true);
+                    }
+                }
+                else if (foundInGoogleBooksByISBN && !foundInGoodReadsApiByISBN && (!hasImage || !hasAuthor || !hastTitle)){
+                    bookInfo = getBookInfoByCuspideHTML(isbn);
+
+                    if (bookInfo.isEmpty()) {
+                        //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
+                        bookInfo = getBookInfoByGoogleApi(isbn, true);
+                    }
                 }
             }
         } catch (JSONException e) {
