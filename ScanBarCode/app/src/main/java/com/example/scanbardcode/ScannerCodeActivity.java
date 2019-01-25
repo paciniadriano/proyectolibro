@@ -191,9 +191,19 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
         try {
             jsonObject = new JSONObject(s);
 
-            MainActivity.authorTextView.setText(jsonObject.getString("author"));
-            MainActivity.titleTextView.setText(jsonObject.getString("title"));
-            Picasso.get().load(jsonObject.getString("img")).into(MainActivity.bookImageView);
+            String author = jsonObject.getString("author");
+            String title = jsonObject.getString("title");
+
+            MainActivity.authorTextView.setText(author.equals("") ? "Not found" : author);
+            MainActivity.titleTextView.setText(title.equals("") ? "Not found" : title);
+
+            if (!jsonObject.getString("img").isEmpty()) {
+                Picasso.get().load(jsonObject.getString("img")).into(MainActivity.bookImageView);
+            }
+            else{
+                String noCoverAvailable = "https://vignette.wikia.nocookie.net/shadowhunter/images/d/dd/Muestralibro.png/revision/latest?cb=20160630172813&path-prefix=es";
+                Picasso.get().load(noCoverAvailable).into(MainActivity.bookImageView);
+            }
         } catch (JSONException e) {
             e.printStackTrace();
         }

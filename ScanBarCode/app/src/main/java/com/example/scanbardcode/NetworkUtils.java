@@ -35,9 +35,11 @@ public class NetworkUtils {
 
     private static String GOOGLE_API_BASE_URL = "https://www.googleapis.com/books/v1/volumes?";
     private static String GOODREADS_API_BASE_URL = "https://www.goodreads.com/search/index.xml?";
-
-    //And idea is to use jsoup to parse this HTML from Cuspide and get the Author, Title and Image of the book
+    private static String AMAZON_BASE_URL = "https://www.amazon.com/s/ref=nb_sb_noss?";
     private static String CUSPIDE_BASE_URL = "https://www.cuspide.com/resultados.aspx?";
+
+    //Para buscar en AMAZON por ISBN!!
+    //https://www.amazon.com/s/ref=nb_sb_noss?field-keywords=9789870407195
 
 
     private static String QUERY_PARAM = "q";
@@ -187,6 +189,68 @@ public class NetworkUtils {
             return result;
         }
     }
+
+
+    public static String getBookInfoByAmazonHTML(String isbn){
+        String result = "{}";
+
+        try {
+            Document jsoupDOC = Jsoup.connect(AMAZON_BASE_URL + "field-keywords=" + isbn).get();
+
+            Elements liFirstBook = jsoupDOC.select("li[id=result_0]");
+
+            if (liFirstBook.size() > 0){
+
+                Elements imgsBook = liFirstBook.get(0).select("img[src*=https://images-na.ssl-images-amazon.com/images/]");
+                Elements authors = jsoupDOC.select("a[href*=AutorEstricto]");
+                Elements titles = jsoupDOC.select("a[href*=/Libro/" + isbn  + "]");
+
+
+                if (authors.size() > 0) {
+                    Element imgBook = imgsBook.get(0);
+
+                    //Para el título
+                    // div  a-fixed-left-grid-col a-col-right
+                    // div  a-row a-spacing-small
+                    // div  a-row a-spacing-none
+                    // a  => a-link-normal s-access-detail-page  s-color-twister-title-link a-text-normal => en el attr title
+                    // ó sino
+                    // en el h2 que está dentro del link => en el data-attribute
+                    // ó sino
+                    // en el h2 que tiene la clase "a-size-medium s-inline  s-access-title  a-text-normal" en el text
+
+
+                    //Para el autor
+                    // div  a-fixed-left-grid-col a-col-right
+                    // div  a-row a-spacing-small
+                    // el segundo div a-row a-spacing-none
+                    // el segundo span a-size-small a-color-secondary
+
+
+                    Element author = authors.get(0);
+                    Element title = titles.get(0);
+
+                    String authorTxt = author.text();
+                    String titleTxt = title.attr("title");
+                    String imgSrc = imgBook.attr("src");
+
+                    String googleBooksTemplateForCuspide = "{ \"totalItems\": 1, \"items\" : [{ \"volumeInfo\": { \"title\": \"<TITLE>\", \"authors\": [ \"<AUTHOR>\" ], \"imageLinks\": { \"thumbnail\": \"<THUMBNAIL>\"  } } }] }";
+
+                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<AUTHOR>", authorTxt);
+                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<TITLE>", titleTxt);
+                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<THUMBNAIL>", imgSrc);
+
+                    result = googleBooksTemplateForCuspide;
+                }
+
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally{
+            return result;
+        }
+    }
+
 
 
     //TODO: I have to refactor all this code to obtain independently the author, title and image, without losing any of the three
