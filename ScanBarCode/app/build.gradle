@@ -29,4 +29,5 @@ dependencies {
     implementation 'me.dm7.barcodescanner:zxing:1.9.8'
     implementation "com.android.volley:volley:1.1.1"
     implementation 'com.squareup.picasso:picasso:2.71828'
+    implementation 'org.jsoup:jsoup:1.11.3'
 }

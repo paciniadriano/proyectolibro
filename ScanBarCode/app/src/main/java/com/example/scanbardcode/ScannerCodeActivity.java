@@ -188,13 +188,15 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
 
             if (!s.contains("GoodreadsResponse")) {
                 JSONObject jsonObject = new JSONObject(s);
-                JSONArray itemsArray = jsonObject.getJSONArray("items");
 
-                for (int i = 0; i < itemsArray.length(); i++) {
-                    JSONObject book = itemsArray.getJSONObject(i);
-                    JSONObject volumeInfo = book.getJSONObject("volumeInfo");
+                if (jsonObject.has("items")) {
+                    JSONArray itemsArray = jsonObject.getJSONArray("items");
 
                     try {
+                        //I only get the first option
+                        JSONObject book = itemsArray.getJSONObject(0);
+                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
+
                         JSONArray authors = volumeInfo.getJSONArray("authors");
                         String authorNames = "";
 
@@ -209,11 +211,16 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
                         MainActivity.authorTextView.setText(authorNames);
                         MainActivity.titleTextView.setText(volumeInfo.getString("title"));
 
-                        JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                        Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
+                        if (volumeInfo.has("imageLinks")) {
+                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
+                            Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
+                }
+                else{
+                    MainActivity.authorTextView.setText("No results found");
                 }
             }
             else{

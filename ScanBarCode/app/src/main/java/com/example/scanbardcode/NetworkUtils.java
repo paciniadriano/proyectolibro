@@ -4,6 +4,10 @@ import android.net.Uri;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -11,6 +15,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 
 
 //Goodreads api key and secret
@@ -24,16 +30,23 @@ public class NetworkUtils {
     private static String GOOGLE_API_BASE_URL = "https://www.googleapis.com/books/v1/volumes?";
     private static String GOODREADS_API_BASE_URL = "https://www.goodreads.com/search/index.xml?";
 
+    //And idea is to use jsoup to parse this HTML from Cuspide and get the Author, Title and Image of the book
+    private static String CUSPIDE_BASE_URL = "https://www.cuspide.com/resultados.aspx?";
+
+
     private static String QUERY_PARAM = "q";
 
-    private static String getBookInfoByGoogleApi(String isbn){
+    private static String getBookInfoByGoogleApi(String isbn, boolean isISBNPhrase){
         HttpURLConnection urlConnection = null;
         BufferedReader reader = null;
         String bookJSONString = null;
 
+        String isbnQuery = ((isISBNPhrase) ? "ISBN:" : "isbn:");
+
         try {
+
             Uri builtURi = Uri.parse(GOOGLE_API_BASE_URL).buildUpon()
-                    .appendQueryParameter(QUERY_PARAM, "isbn:" + isbn).build();
+                    .appendQueryParameter(QUERY_PARAM, isbnQuery + isbn).build();
 
             URL requestURL = new URL(builtURi.toString());
 
@@ -136,22 +149,76 @@ public class NetworkUtils {
         }
     }
 
+    public static String getBookInfoByCuspideHTML(String isbn){
+        String result = "";
+
+        try {
+            Document jsoupDOC = Jsoup.connect(CUSPIDE_BASE_URL + "c=" + isbn).get();
+            Elements imgs = jsoupDOC.select("img[src*=https://www.cuspide.com/content/cover/]");
+            Elements authors = jsoupDOC.select("a[href*=AutorEstricto]");
+            Elements titles = jsoupDOC.select("a[href*=/Libro/" + isbn  + "]");
+
+            if (authors.size() > 0) {
+                Element imgBook = imgs.get(0);
+                Element author = authors.get(0);
+                Element title = titles.get(0);
+
+                String authorTxt = author.text();
+                String titleTxt = title.attr("title");
+                String imgSrc = imgBook.attr("src");
+
+                String googleBooksTemplateForCuspide = "{ \"totalItems\": 1, \"items\" : [{ \"volumeInfo\": { \"title\": \"<TITLE>\", \"authors\": [ \"<AUTHOR>\" ], \"imageLinks\": { \"thumbnail\": \"<THUMBNAIL>\"  } } }] }";
+
+                googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<AUTHOR>", authorTxt);
+                googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<TITLE>", titleTxt);
+                googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<THUMBNAIL>", imgSrc);
+
+                result = googleBooksTemplateForCuspide;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally{
+            return result;
+        }
+    }
+
     public static String getBookInfo(String isbn) {
-        String bookInfo = getBookInfoByGoogleApi(isbn);
+        String bookInfoByGoogleApi = getBookInfoByGoogleApi(isbn, false);
+        String bookInfo = null;
 
         JSONObject jsonObject = null;
         try {
-            jsonObject = new JSONObject(bookInfo);
+            jsonObject = new JSONObject(bookInfoByGoogleApi);
             String totalItemsCount = jsonObject.getString("totalItems");
-            boolean hasImage = jsonObject.has("imageLinks");
+            boolean hasImage =  bookInfoByGoogleApi.contains("imageLinks");
+            boolean foundInGoogleBooksByISBN = !totalItemsCount.equals("0");
+            boolean foundInGoodReadsApiByISBN = false;
 
-            if (totalItemsCount.equals("0") || !hasImage){
+            bookInfo = bookInfoByGoogleApi;
+
+            if (!foundInGoogleBooksByISBN || !hasImage){
                 bookInfo = getBookInfoByGoodreadsApi(isbn);
+                foundInGoodReadsApiByISBN = !bookInfo.contains("<total-results>0</total-results>");
+
+                if (!foundInGoogleBooksByISBN && !foundInGoodReadsApiByISBN){
+                    bookInfo = getBookInfoByCuspideHTML(isbn);
+
+                    if (bookInfo.isEmpty()){
+                           //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
+                        bookInfo = getBookInfoByGoogleApi(isbn, true);
+                    }
+                }
+                else if (!foundInGoodReadsApiByISBN && foundInGoogleBooksByISBN){
+                    bookInfo = bookInfoByGoogleApi;
+                }
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
         finally{
+
+
+
             return bookInfo;
         }
     }
