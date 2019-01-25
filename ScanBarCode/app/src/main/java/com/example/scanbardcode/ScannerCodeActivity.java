@@ -36,6 +36,7 @@ import java.io.InputStreamReader;
 import me.dm7.barcodescanner.zxing.ZXingScannerView;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.w3c.dom.Text;
 
@@ -148,7 +149,7 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
             getSupportLoaderManager().restartLoader(0, queryBundle, this);
         }
         else{
-            Toast toast = Toast.makeText(getApplicationContext(), "Please, scan valid ISBN", Toast.LENGTH_SHORT);
+            Toast toast = Toast.makeText(getApplicationContext(), "Please, retry the scanning", Toast.LENGTH_SHORT);
             toast.show();
         }
     }
@@ -172,7 +173,7 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
     public Loader<String> onCreateLoader(int i, @Nullable Bundle bundle) {
         progress = new ProgressDialog(this);
         progress.setTitle("Loading");
-        progress.setMessage("Buscando el libro en Google Books y en Goodreads");
+        progress.setMessage("Searching the book");
         progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
         progress.show();
 
@@ -181,64 +182,22 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
 
     @Override
     public void onLoadFinished(@NonNull Loader<String> loader, String s) {
+
+        MainActivity.authorTextView.setText("");
+        MainActivity.titleTextView.setText("");
+        MainActivity.bookImageView.setImageResource(android.R.color.transparent);
+
+        JSONObject jsonObject = null;
         try {
-            MainActivity.authorTextView.setText("");
-            MainActivity.titleTextView.setText("");
-            MainActivity.bookImageView.setImageResource(android.R.color.transparent);
+            jsonObject = new JSONObject(s);
 
-            if (!s.contains("GoodreadsResponse")) {
-                JSONObject jsonObject = new JSONObject(s);
-
-                if (jsonObject.has("items")) {
-                    JSONArray itemsArray = jsonObject.getJSONArray("items");
-
-                    try {
-                        //I only get the first option
-                        JSONObject book = itemsArray.getJSONObject(0);
-                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
-
-                        JSONArray authors = volumeInfo.getJSONArray("authors");
-                        String authorNames = "";
-
-                        for (int j = 0; j < authors.length(); j++) {
-                            if (j == 0) {
-                                authorNames += authors.getString(j).replace("\"", "");
-                            } else {
-                                authorNames += ", " + authors.getString(j);
-                            }
-                        }
-
-                        MainActivity.authorTextView.setText(authorNames);
-                        MainActivity.titleTextView.setText(volumeInfo.getString("title"));
-
-                        if (volumeInfo.has("imageLinks")) {
-                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                            Picasso.get().load(imageLinks.getString("thumbnail")).into(MainActivity.bookImageView);
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-                else{
-                    MainActivity.authorTextView.setText("No results found");
-                }
-            }
-            else{
-                InputStream xmlStream = new ByteArrayInputStream(s.getBytes());
-                GoodreadsResponse goodreadsResponse = XMLParser.GetGoodreadsResonseFromXML(xmlStream);
-
-                if (goodreadsResponse.TotalResults != 0) {
-                    MainActivity.authorTextView.setText(goodreadsResponse.Results.get(0).Authors.get(0));
-                    MainActivity.titleTextView.setText(goodreadsResponse.Results.get(0).Title);
-                    Picasso.get().load(goodreadsResponse.Results.get(0).URLImage).into(MainActivity.bookImageView);
-                }
-                else{
-                    MainActivity.authorTextView.setText("No results found");
-                }
-            }
-        } catch (Exception e){
+            MainActivity.authorTextView.setText(jsonObject.getString("author"));
+            MainActivity.titleTextView.setText(jsonObject.getString("title"));
+            Picasso.get().load(jsonObject.getString("img")).into(MainActivity.bookImageView);
+        } catch (JSONException e) {
             e.printStackTrace();
         }
+
         onBackPressed();
     }
 
