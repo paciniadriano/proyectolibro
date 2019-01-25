@@ -44,6 +44,7 @@ public class NetworkUtils {
                 return null;
             }
             reader = new BufferedReader(new InputStreamReader(inputStream));
+
             String line;
 
             while((line = reader.readLine()) != null){

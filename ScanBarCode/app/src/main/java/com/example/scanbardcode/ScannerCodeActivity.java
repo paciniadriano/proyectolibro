@@ -37,11 +37,13 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.w3c.dom.Text;
 
-public class ScannerCodeActivity extends AppCompatActivity implements ZXingScannerView.ResultHandler, LoaderManager.LoaderCallbacks<String>{
+public class ScannerCodeActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<String>, ZXingScannerView.ResultHandler{
     ZXingScannerView scannerView;
     private int CAMERA_PERMISSION_CODE = 23;
     private String authorName = "";
     private String titleName = "";
+
+    public static boolean isLoaderRunning = false;
 
     private boolean isCameraAccessAllowed() {
         int result = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
@@ -65,7 +67,8 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
             requestCameraPermission();
         }
 
-        if (getLoaderManager().getLoader(0) != null) {
+        Loader<String> loader =getSupportLoaderManager().getLoader(0);
+        if (loader != null){
             getSupportLoaderManager().initLoader(0, null, this);
         }
     }
@@ -136,10 +139,6 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
         String isbn = result.getText();
         if (isValidISBN(isbn)){
             MainActivity.resultTextView.setText(result.getText());
-            onBackPressed();
-
-//            setContentView(R.layout.activity_main);
-//            new GoogleApiBooks(MainActivity.authorTextView, MainActivity.titleTextView, MainActivity.bookImageView).execute(isbn);
 
             Bundle queryBundle = new Bundle();
             queryBundle.putString("queryString", isbn);
@@ -149,8 +148,6 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
         else{
             Toast toast = Toast.makeText(getApplicationContext(), "Please, scan valid ISBN", Toast.LENGTH_SHORT);
             toast.show();
-
-            onBackPressed();
         }
     }
 
@@ -169,12 +166,15 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
 
     @NonNull
     @Override
-    public Loader<String> onCreateLoader(int i, @Nullable Bundle args) {
-        return new BookLoader(this, args.getString("queryString"), args.getBoolean ("isSecondCall", false));
+    public Loader<String> onCreateLoader(int i, @Nullable Bundle bundle) {
+        return new BookLoader(this, bundle.getString("queryString"), bundle.getBoolean ("isSecondCall", false));
+        //return new TestLoader(this);
     }
 
     @Override
     public void onLoadFinished(@NonNull Loader<String> loader, String s) {
+
+        Toast.makeText(this, "Loader terminado" , Toast.LENGTH_SHORT).show();
 
         try {
             MainActivity.authorTextView.setText("");
@@ -194,6 +194,8 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
 
                     getSupportLoaderManager().restartLoader(0, queryBundle, this);
                 } else {
+
+                    onBackPressed();
 
                     JSONArray itemsArray = jsonObject.getJSONArray("items");
 
@@ -226,6 +228,8 @@ public class ScannerCodeActivity extends AppCompatActivity implements ZXingScann
                 }
             }
             else{
+                onBackPressed();
+
                 InputStream xmlStream = new ByteArrayInputStream(s.getBytes());
                 GoodreadsResponse goodreadsResponse = XMLParser.GetGoodreadsResonseFromXML(xmlStream);
 
