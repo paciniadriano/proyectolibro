@@ -158,7 +158,9 @@ public class ScannerCodeActivity extends AppCompatActivity implements LoaderMana
     public void onPause(){
         super.onPause();
         scannerView.stopCamera();
-        progress.dismiss();
+        if (progress != null) {
+            progress.dismiss();
+        }
     }
 
     @Override

@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -191,58 +192,39 @@ public class NetworkUtils {
     }
 
 
-    public static String getBookInfoByAmazonHTML(String isbn){
+    private static String getBookInfoByAmazonHTML(String isbn){
         String result = "{}";
 
         try {
             Document jsoupDOC = Jsoup.connect(AMAZON_BASE_URL + "field-keywords=" + isbn).get();
-
             Elements liFirstBook = jsoupDOC.select("li[id=result_0]");
 
             if (liFirstBook.size() > 0){
-
                 Elements imgsBook = liFirstBook.get(0).select("img[src*=https://images-na.ssl-images-amazon.com/images/]");
-                Elements authors = jsoupDOC.select("a[href*=AutorEstricto]");
-                Elements titles = jsoupDOC.select("a[href*=/Libro/" + isbn  + "]");
-
+                Elements authors = liFirstBook.get(0).select(".a-col-right .a-row:eq(1) span.a-size-small:eq(1)");
+                Elements titles = jsoupDOC.select("h2.s-access-title");
 
                 if (authors.size() > 0) {
                     Element imgBook = imgsBook.get(0);
-
-                    //Para el título
-                    // div  a-fixed-left-grid-col a-col-right
-                    // div  a-row a-spacing-small
-                    // div  a-row a-spacing-none
-                    // a  => a-link-normal s-access-detail-page  s-color-twister-title-link a-text-normal => en el attr title
-                    // ó sino
-                    // en el h2 que está dentro del link => en el data-attribute
-                    // ó sino
-                    // en el h2 que tiene la clase "a-size-medium s-inline  s-access-title  a-text-normal" en el text
-
-
-                    //Para el autor
-                    // div  a-fixed-left-grid-col a-col-right
-                    // div  a-row a-spacing-small
-                    // el segundo div a-row a-spacing-none
-                    // el segundo span a-size-small a-color-secondary
-
-
                     Element author = authors.get(0);
                     Element title = titles.get(0);
 
                     String authorTxt = author.text();
-                    String titleTxt = title.attr("title");
+                    String titleTxt = title.text();
                     String imgSrc = imgBook.attr("src");
 
-                    String googleBooksTemplateForCuspide = "{ \"totalItems\": 1, \"items\" : [{ \"volumeInfo\": { \"title\": \"<TITLE>\", \"authors\": [ \"<AUTHOR>\" ], \"imageLinks\": { \"thumbnail\": \"<THUMBNAIL>\"  } } }] }";
+                    if (imgSrc.contains("no-img")){
+                        imgSrc = "";
+                    }
 
-                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<AUTHOR>", authorTxt);
-                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<TITLE>", titleTxt);
-                    googleBooksTemplateForCuspide = googleBooksTemplateForCuspide.replace("<THUMBNAIL>", imgSrc);
+                    String googleBooksTemplateForAmazon = "{ \"totalItems\": 1, \"items\" : [{ \"volumeInfo\": { \"title\": \"<TITLE>\", \"authors\": [ \"<AUTHOR>\" ], \"imageLinks\": { \"thumbnail\": \"<THUMBNAIL>\"  } } }] }";
 
-                    result = googleBooksTemplateForCuspide;
+                    googleBooksTemplateForAmazon = googleBooksTemplateForAmazon.replace("<AUTHOR>", authorTxt);
+                    googleBooksTemplateForAmazon = googleBooksTemplateForAmazon.replace("<TITLE>", titleTxt);
+                    googleBooksTemplateForAmazon = googleBooksTemplateForAmazon.replace("<THUMBNAIL>", imgSrc);
+
+                    result = googleBooksTemplateForAmazon;
                 }
-
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -251,20 +233,9 @@ public class NetworkUtils {
         }
     }
 
-
-
-    //TODO: I have to refactor all this code to obtain independently the author, title and image, without losing any of the three
-    //To do this I have to get the code from the ScannerCodeActivity.onFinishLoad and put it right here
-    //And then I have to return only the three elements that I want in a json format. To parse it in the oonFinishLoad method
-    public static String getBookInfo(String isbn) {
-        String bookInfoByGoogleApi = getBookInfoByGoogleApi(isbn, false);
-        String bookInfo = bookInfoByGoogleApi;
-
-        String authorTxt = "";
-        String titleTxt = "";
-        String bookImgTxt = "";
-
+    private static ArrayList<String> getJSONObjectByBookInfo(String bookInfo, String authorTxt, String  titleTxt, String  bookImgTxt){
         JSONObject jsonObject = null;
+        ArrayList<String> results = new ArrayList<>();
 
         try {
             jsonObject = new JSONObject(bookInfo);
@@ -276,33 +247,83 @@ public class NetworkUtils {
                 JSONObject book = itemsArray.getJSONObject(0);
                 JSONObject volumeInfo = book.getJSONObject("volumeInfo");
 
-                String authorNames = "";
+                if (volumeInfo.has("authors") && authorTxt.isEmpty()) {
+                    String authorNames = "";
 
-                if (volumeInfo.has("authors")) {
-                    JSONArray authors = volumeInfo.getJSONArray("authors");
+                    if (volumeInfo.has("authors")) {
+                        JSONArray authors = volumeInfo.getJSONArray("authors");
 
-                    for (int j = 0; j < authors.length(); j++) {
-                        if (j == 0) {
-                            authorNames += authors.getString(j).replace("\"", "");
-                        } else {
-                            authorNames += ", " + authors.getString(j);
+                        for (int j = 0; j < authors.length(); j++) {
+                            if (j == 0) {
+                                authorNames += authors.getString(j).replace("\"", "");
+                            } else {
+                                authorNames += ", " + authors.getString(j);
+                            }
                         }
                     }
+                    results.add(authorNames);
                 }
-                authorTxt = authorNames;
-
-                if (volumeInfo.has("title")) {
-                    titleTxt = volumeInfo.getString("title");
+                else{
+                    results.add("");
                 }
 
-                if (volumeInfo.has("imageLinks")) {
+                if ((volumeInfo.has("title") || volumeInfo.has("unknown")) && titleTxt.isEmpty()) {
+                    results.add(volumeInfo.getString("title"));
+                }
+                else{
+                    results.add("");
+                }
+
+                if (volumeInfo.has("imageLinks") && bookImgTxt.isEmpty()) {
                     JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                    bookImgTxt = imageLinks.getString("thumbnail");
+                    results.add(imageLinks.getString("thumbnail"));
+                }
+                else{
+                    results.add("");
                 }
             }
+            else{
+                results.add(authorTxt);
+                results.add(titleTxt);
+                results.add(bookImgTxt);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        finally {
+            return results;
+        }
+    }
+
+    private static boolean missingSomeDataItem(String authorTxt, String titleTxt, String bookImgTxt){
+        return (authorTxt.isEmpty() || titleTxt.isEmpty() || titleTxt.equals("unknown") || bookImgTxt.isEmpty());
+    }
+
+    //TODO: I have to refactor all this code to obtain independently the author, title and image, without losing any of the three
+    //To do this I have to get the code from the ScannerCodeActivity.onFinishLoad and put it right here
+    //And then I have to return only the three elements that I want in a json format. To parse it in the oonFinishLoad method
+    public static String getBookInfo(String isbn) {
+        String bookInfo = getBookInfoByGoogleApi(isbn, false);
+        String authorTxt = "";
+        String titleTxt = "";
+        String bookImgTxt = "";
+
+        ArrayList<String> resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
+        authorTxt = resultsBookInfo.get(0);
+        titleTxt = resultsBookInfo.get(1);
+        bookImgTxt = resultsBookInfo.get(2);
+
+        //I have to find this info in the next API provider or Webpage. In this case: Amazon web
+        if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
+            bookInfo = getBookInfoByAmazonHTML(isbn);
+
+            resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
+            authorTxt = resultsBookInfo.get(0);
+            titleTxt = resultsBookInfo.get(1);
+            bookImgTxt = resultsBookInfo.get(2);
 
             //I have to find this info in the next API provider. In this case: Goodreads
-            if (authorTxt.isEmpty() || titleTxt.isEmpty() || bookImgTxt.isEmpty()){
+            if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
                 bookInfo = getBookInfoByGoodreadsApi(isbn);
 
                 InputStream xmlStream = new ByteArrayInputStream(bookInfo.getBytes());
@@ -317,93 +338,28 @@ public class NetworkUtils {
                     }
                 }
 
-                if (authorTxt.isEmpty() || titleTxt.equals("unknown") || titleTxt.isEmpty() || bookImgTxt.isEmpty()){
+                //I have to find this info in the next API provider or Webpage. In this case: Cuspide web
+                if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
                     bookInfo = getBookInfoByCuspideHTML(isbn);
 
-                    jsonObject = new JSONObject(bookInfo);
-
-                    if (jsonObject.has("items")) {
-                        JSONArray itemsArray = jsonObject.getJSONArray("items");
-
-                        //I only get the first option
-                        JSONObject book = itemsArray.getJSONObject(0);
-                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
-
-                        //Cuspide is better for getting the correct name. If I already called Cuspide then I seize the author field
-                        String authorNames = "";
-
-                        if (volumeInfo.has("authors")) {
-                            JSONArray authors = volumeInfo.getJSONArray("authors");
-
-                            for (int j = 0; j < authors.length(); j++) {
-                                if (j == 0) {
-                                    authorNames += authors.getString(j).replace("\"", "");
-                                } else {
-                                    authorNames += ", " + authors.getString(j);
-                                }
-                            }
-                        }
-                        authorTxt = authorNames;
-
-
-                        if (titleTxt.isEmpty() || titleTxt.equals("unknown")) {
-                            titleTxt = volumeInfo.getString("title");
-                        }
-
-                        if (bookImgTxt.isEmpty()) {
-                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                            bookImgTxt = imageLinks.getString("thumbnail");
-                        }
-                    }
+                    resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
+                    authorTxt = resultsBookInfo.get(0);
+                    titleTxt = resultsBookInfo.get(1);
+                    bookImgTxt = resultsBookInfo.get(2);
                 }
 
-                if (authorTxt.isEmpty() || titleTxt.isEmpty() || bookImgTxt.isEmpty()) {
-                    //I try to find the book by q=ISBN:<ISBN> in GoogleBooksApi, is the ISBN as a phrase
+                //I have to find this info in the next API provider. In this case: GoogleBooks with the ISBN as a phrase
+                if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
                     bookInfo = getBookInfoByGoogleApi(isbn, true);
 
-                    jsonObject = new JSONObject(bookInfo);
-
-                    if (jsonObject.has("items")) {
-                        JSONArray itemsArray = jsonObject.getJSONArray("items");
-
-                        //I only get the first option
-                        JSONObject book = itemsArray.getJSONObject(0);
-                        JSONObject volumeInfo = book.getJSONObject("volumeInfo");
-
-                        if (volumeInfo.has("authors") && authorTxt.isEmpty()) {
-                            String authorNames = "";
-
-                            if (volumeInfo.has("authors")) {
-                                JSONArray authors = volumeInfo.getJSONArray("authors");
-
-                                for (int j = 0; j < authors.length(); j++) {
-                                    if (j == 0) {
-                                        authorNames += authors.getString(j).replace("\"", "");
-                                    } else {
-                                        authorNames += ", " + authors.getString(j);
-                                    }
-                                }
-                            }
-                            authorTxt = authorNames;
-                        }
-
-                        if (volumeInfo.has("title") && titleTxt.isEmpty()) {
-                            titleTxt = volumeInfo.getString("title");
-                        }
-
-                        if (volumeInfo.has("imageLinks") && bookImgTxt.isEmpty()) {
-                            JSONObject imageLinks = volumeInfo.getJSONObject("imageLinks");
-                            bookImgTxt = imageLinks.getString("thumbnail");
-                        }
-                    }
+                    resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
+                    authorTxt = resultsBookInfo.get(0);
+                    titleTxt = resultsBookInfo.get(1);
+                    bookImgTxt = resultsBookInfo.get(2);
                 }
             }
+        }
 
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        finally {
-            return "{ \"author\" : \"" + authorTxt + "\", \"title\" : \"" + titleTxt + "\", \"img\" : \"" + bookImgTxt + "\" }";
-        }
+        return "{ \"author\" : \"" + authorTxt + "\", \"title\" : \"" + titleTxt + "\", \"img\" : \"" + bookImgTxt + "\" }";
     }
 }
