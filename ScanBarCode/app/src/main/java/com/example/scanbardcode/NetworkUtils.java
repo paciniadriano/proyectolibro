@@ -196,7 +196,9 @@ public class NetworkUtils {
         String result = "{}";
 
         try {
-            Document jsoupDOC = Jsoup.connect(AMAZON_BASE_URL + "field-keywords=" + isbn).get();
+            Document jsoupDOC = Jsoup.connect(AMAZON_BASE_URL + "field-keywords=" + isbn).
+                          userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36").get();
+
             Elements liFirstBook = jsoupDOC.select("li[id=result_0]");
 
             if (liFirstBook.size() > 0){
@@ -316,11 +318,10 @@ public class NetworkUtils {
         //I have to find this info in the next API provider or Webpage. In this case: Amazon web
         if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
             bookInfo = getBookInfoByAmazonHTML(isbn);
-
             resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
-            authorTxt = resultsBookInfo.get(0);
-            titleTxt = resultsBookInfo.get(1);
-            bookImgTxt = resultsBookInfo.get(2);
+            authorTxt = authorTxt.isEmpty() ? resultsBookInfo.get(0) : authorTxt;
+            titleTxt = titleTxt.isEmpty() ? resultsBookInfo.get(1) : titleTxt;
+            bookImgTxt = bookImgTxt.isEmpty() ? resultsBookInfo.get(2) : bookImgTxt;
 
             //I have to find this info in the next API provider. In this case: Goodreads
             if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
@@ -332,7 +333,6 @@ public class NetworkUtils {
                 if (goodreadsResponse.TotalResults != 0) {
                     authorTxt = authorTxt.isEmpty() ? goodreadsResponse.Results.get(0).Authors.get(0) : authorTxt;
                     titleTxt = titleTxt.isEmpty() ? goodreadsResponse.Results.get(0).Title : titleTxt;
-
                     if (bookImgTxt.isEmpty() && !goodreadsResponse.Results.get(0).URLImage.contains("assets/nophoto/")) {
                         bookImgTxt = goodreadsResponse.Results.get(0).URLImage;
                     }
@@ -341,21 +341,19 @@ public class NetworkUtils {
                 //I have to find this info in the next API provider or Webpage. In this case: Cuspide web
                 if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
                     bookInfo = getBookInfoByCuspideHTML(isbn);
-
                     resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
-                    authorTxt = resultsBookInfo.get(0);
-                    titleTxt = resultsBookInfo.get(1);
-                    bookImgTxt = resultsBookInfo.get(2);
+                    authorTxt = authorTxt.isEmpty() ? resultsBookInfo.get(0) : authorTxt;
+                    titleTxt = titleTxt.isEmpty() ? resultsBookInfo.get(1) : titleTxt;
+                    bookImgTxt = bookImgTxt.isEmpty() ? resultsBookInfo.get(2) : bookImgTxt;
                 }
 
                 //I have to find this info in the next API provider. In this case: GoogleBooks with the ISBN as a phrase
                 if (missingSomeDataItem(authorTxt, titleTxt, bookImgTxt)) {
                     bookInfo = getBookInfoByGoogleApi(isbn, true);
-
                     resultsBookInfo = getJSONObjectByBookInfo(bookInfo, authorTxt, titleTxt, bookImgTxt);
-                    authorTxt = resultsBookInfo.get(0);
-                    titleTxt = resultsBookInfo.get(1);
-                    bookImgTxt = resultsBookInfo.get(2);
+                    authorTxt = authorTxt.isEmpty() ? resultsBookInfo.get(0) : authorTxt;
+                    titleTxt = titleTxt.isEmpty() ? resultsBookInfo.get(1) : titleTxt;
+                    bookImgTxt = bookImgTxt.isEmpty() ? resultsBookInfo.get(2) : bookImgTxt;
                 }
             }
         }
